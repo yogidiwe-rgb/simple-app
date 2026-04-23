@@ -1,0 +1,140 @@
+pipeline {
+    agent any
+    
+    environment {
+        DOCKER_REGISTRY = 'docker.io/yogisre12345'
+        IMAGE_NAME = 'simple-fullstack-app'
+        PROD_CLUSTER = 'prod-cluster'
+    }
+    
+    stages {
+        stage('Checkout') {
+            steps {
+                script {
+                    checkout scm
+                }
+            }
+        }
+        
+        stage('Build Docker Images') {
+            steps {
+                script {
+                    echo "Building Docker images for PROD deployment..."
+                    
+                    // Build production images
+                    sh 'docker build -t ${DOCKER_REGISTRY}/${IMAGE_NAME}:prod-${BUILD_NUMBER} ./backend'
+                    sh 'docker build -t ${DOCKER_REGISTRY}/${IMAGE_NAME}:prod-${BUILD_NUMBER} ./gateway'
+                    sh 'docker build -t ${DOCKER_REGISTRY}/${IMAGE_NAME}:prod-${BUILD_NUMBER} ./frontend'
+                    
+                    // Tag as production latest
+                    sh 'docker tag ${DOCKER_REGISTRY}/${IMAGE_NAME}:prod-${BUILD_NUMBER} ${DOCKER_REGISTRY}/${IMAGE_NAME}:prod-latest'
+                }
+            }
+        }
+        
+        stage('Security Scan') {
+            steps {
+                script {
+                    echo "Running comprehensive security scan..."
+                    
+                    // Advanced security scanning
+                    sh 'docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:latest image ${DOCKER_REGISTRY}/${IMAGE_NAME}:prod-${BUILD_NUMBER}'
+                }
+            }
+        }
+        
+        stage('Push Images') {
+            steps {
+                script {
+                    echo "Pushing production images to registry..."
+                    
+                    sh 'docker push ${DOCKER_REGISTRY}/${IMAGE_NAME}:prod-${BUILD_NUMBER}'
+                    sh 'docker push ${DOCKER_REGISTRY}/${IMAGE_NAME}:prod-latest'
+                }
+            }
+        }
+        
+        stage('Manual Approval') {
+            steps {
+                script {
+                    echo "Waiting for manual approval for PROD deployment..."
+                    
+                    // Manual approval gate
+                    input message: 'Deploy to PROD?', ok: 'Deploy'
+                }
+            }
+        }
+        
+        stage('Deploy to PROD') {
+            steps {
+                script {
+                    echo "Deploying to PROD cluster..."
+                    
+                    // Configure kubectl for PROD cluster
+                    sh 'kubectl config use-context ${PROD_CLUSTER}'
+                    
+                    // Apply production manifests
+                    sh 'kubectl apply -f k8s/prod/backend-deployment.yaml'
+                    sh 'kubectl apply -f k8s/prod/gateway-deployment.yaml'
+                    sh 'kubectl apply -f k8s/prod/frontend-deployment.yaml'
+                    
+                    // Wait for rollout
+                    sh 'kubectl rollout status deployment/backend -n prod'
+                    sh 'kubectl rollout status deployment/gateway -n prod'
+                    sh 'kubectl rollout status deployment/frontend -n prod'
+                }
+            }
+        }
+        
+        stage('PROD Health Check') {
+            steps {
+                script {
+                    echo "Running PROD health checks..."
+                    
+                    // Wait for services to be ready
+                    sh 'sleep 60'
+                    
+                    // Test production endpoints
+                    sh 'curl -f http://prod-cluster.example.com/api/health || exit 1'
+                    sh 'curl -f http://prod-cluster.example.com/health || exit 1'
+                }
+            }
+        }
+        
+        stage('Production Tests') {
+            steps {
+                script {
+                    echo "Running full production tests..."
+                    
+                    // Comprehensive testing
+                    sh 'python tests/production_tests.py --env=prod'
+                    sh 'python tests/load_tests.py --target=http://prod-cluster.example.com'
+                }
+            }
+        }
+    }
+    
+    post {
+        always {
+            echo "PROD pipeline completed"
+        }
+        success {
+                    echo "Successfully deployed to PROD environment"
+                    // Notify team
+                    slackSend(
+                        channel: '#prod-deployments',
+                        color: 'good',
+                        message: "🚀 PRODUCTION DEPLOYMENT: ${BUILD_NUMBER}"
+                    )
+                }
+        failure {
+                    echo "PROD pipeline failed - check logs"
+                    slackSend(
+                        channel: '#alerts',
+                        color: 'danger',
+                        message: "🚨 PRODUCTION DEPLOYMENT FAILED: ${BUILD_NUMBER}"
+                    )
+                }
+            }
+    }
+}

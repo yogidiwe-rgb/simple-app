@@ -1,0 +1,58 @@
+version: '3.8'
+
+services:
+  backend:
+    build: ./backend
+    container_name: test-backend
+    ports:
+      - "5002:5001"
+    networks:
+      - test-network
+    environment:
+      - FLASK_ENV=testing
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5001/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  gateway:
+    build: ./gateway
+    container_name: test-gateway
+    ports:
+      - "3001:3000"
+    networks:
+      - test-network
+    depends_on:
+      backend:
+        condition: service_healthy
+    environment:
+      - BACKEND_URL=http://test-backend:5001
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  frontend:
+    build: ./frontend
+    container_name: test-frontend
+    ports:
+      - "8081:80"
+    networks:
+      - test-network
+    depends_on:
+      gateway:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+networks:
+  test-network:
+    driver: bridge

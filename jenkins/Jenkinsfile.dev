@@ -1,0 +1,117 @@
+pipeline {
+    agent any
+    
+    environment {
+        DOCKER_REGISTRY = 'docker.io/yogisre12345'
+        IMAGE_NAME = 'simple-fullstack-app'
+        DEV_CLUSTER = 'dev-cluster'
+    }
+    
+    stages {
+        stage('Checkout') {
+            steps {
+                script {
+                    checkout scm
+                }
+            }
+        }
+        
+        stage('Build Docker Images') {
+            steps {
+                script {
+                    echo "Building Docker images for DEV deployment..."
+                    
+                    // Build and tag images
+                    sh 'docker build -t ${DOCKER_REGISTRY}/${IMAGE_NAME}:dev-${BUILD_NUMBER} ./backend'
+                    sh 'docker build -t ${DOCKER_REGISTRY}/${IMAGE_NAME}:dev-${BUILD_NUMBER} ./gateway'
+                    sh 'docker build -t ${DOCKER_REGISTRY}/${IMAGE_NAME}:dev-${BUILD_NUMBER} ./frontend'
+                    
+                    // Also tag as latest for DEV
+                    sh 'docker tag ${DOCKER_REGISTRY}/${IMAGE_NAME}:dev-${BUILD_NUMBER} ${DOCKER_REGISTRY}/${IMAGE_NAME}:dev-latest'
+                }
+            }
+        }
+        
+        stage('Push Images') {
+            steps {
+                script {
+                    echo "Pushing images to registry..."
+                    
+                    sh 'docker push ${DOCKER_REGISTRY}/${IMAGE_NAME}:dev-${BUILD_NUMBER}'
+                    sh 'docker push ${DOCKER_REGISTRY}/${IMAGE_NAME}:dev-latest'
+                }
+            }
+        }
+        
+        stage('Deploy to DEV') {
+            steps {
+                script {
+                    echo "Deploying to DEV cluster..."
+                    
+                    // Configure kubectl for DEV cluster
+                    sh 'kubectl config use-context ${DEV_CLUSTER}'
+                    
+                    // Apply Kubernetes manifests
+                    sh 'kubectl apply -f k8s/dev/backend-deployment.yaml'
+                    sh 'kubectl apply -f k8s/dev/gateway-deployment.yaml'
+                    sh 'kubectl apply -f k8s/dev/frontend-deployment.yaml'
+                    
+                    // Wait for rollout
+                    sh 'kubectl rollout status deployment/backend -n dev'
+                    sh 'kubectl rollout status deployment/gateway -n dev'
+                    sh 'kubectl rollout status deployment/frontend -n dev'
+                }
+            }
+        }
+        
+        stage('DEV Health Check') {
+            steps {
+                script {
+                    echo "Running DEV health checks..."
+                    
+                    // Wait for services to be ready
+                    sh 'sleep 30'
+                    
+                    // Test endpoints
+                    sh 'curl -f http://dev-cluster.example.com/api/health || exit 1'
+                    sh 'curl -f http://dev-cluster.example.com/health || exit 1'
+                }
+            }
+        }
+        
+        stage('Integration Tests') {
+            steps {
+                script {
+                    echo "Running integration tests on DEV..."
+                    
+                    // Run automated tests
+                    sh 'python tests/integration_tests.py --env=dev'
+                }
+            }
+        }
+    }
+    
+    post {
+        always {
+            echo "DEV pipeline completed"
+        }
+        success {
+                    echo "Successfully deployed to DEV environment"
+                    // Notify team
+                    slackSend(
+                        channel: '#dev-deployments',
+                        color: 'good',
+                        message: "✅ Successfully deployed to DEV: ${BUILD_NUMBER}"
+                    )
+                }
+        failure {
+                    echo "DEV pipeline failed - check logs"
+                    slackSend(
+                        channel: '#dev-deployments',
+                        color: 'danger',
+                        message: "❌ DEV deployment failed: ${BUILD_NUMBER}"
+                    )
+                }
+            }
+    }
+}

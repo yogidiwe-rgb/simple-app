@@ -96,22 +96,21 @@ pipeline {
             echo "DEV pipeline completed"
         }
         success {
-                    echo "Successfully deployed to DEV environment"
-                    // Notify team
-                    slackSend(
-                        channel: '#dev-deployments',
-                        color: 'good',
-                        message: "✅ Successfully deployed to DEV: ${BUILD_NUMBER}"
-                    )
-                }
+            echo "Successfully deployed to DEV environment"
+            // Notify team
+            slackSend(
+                channel: '#dev-deployments',
+                color: 'good',
+                message: "✅ Successfully deployed to DEV: ${BUILD_NUMBER}"
+            )
+        }
         failure {
-                    echo "DEV pipeline failed - check logs"
-                    slackSend(
-                        channel: '#dev-deployments',
-                        color: 'danger',
-                        message: "❌ DEV deployment failed: ${BUILD_NUMBER}"
-                    )
-                }
-            }
+            echo "DEV pipeline failed - check logs"
+            slackSend(
+                channel: '#dev-deployments',
+                color: 'danger',
+                message: "❌ DEV deployment failed: ${BUILD_NUMBER}"
+            )
+        }
     }
 }

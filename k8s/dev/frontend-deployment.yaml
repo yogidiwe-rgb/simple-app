@@ -20,7 +20,7 @@ spec:
     spec:
       containers:
       - name: frontend
-        image: docker.io/yogisre12345/simple-fullstack-app:dev-latest
+        image: docker.io/yogisre12345/simple-fullstack-app-frontend:dev-latest
         ports:
         - containerPort: 80
         env:

@@ -57,11 +57,10 @@ pipeline {
             echo "Feature pipeline completed - no deployment"
         }
         success {
-                    echo "Feature branch built and validated successfully"
-                }
+            echo "Feature branch built and validated successfully"
+        }
         failure {
-                    echo "Feature pipeline failed - check logs"
-                }
-            }
+            echo "Feature pipeline failed - check logs"
+        }
     }
 }

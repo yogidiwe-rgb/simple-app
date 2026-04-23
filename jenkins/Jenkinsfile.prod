@@ -119,22 +119,21 @@ pipeline {
             echo "PROD pipeline completed"
         }
         success {
-                    echo "Successfully deployed to PROD environment"
-                    // Notify team
-                    slackSend(
-                        channel: '#prod-deployments',
-                        color: 'good',
-                        message: "🚀 PRODUCTION DEPLOYMENT: ${BUILD_NUMBER}"
-                    )
-                }
+            echo "Successfully deployed to PROD environment"
+            // Notify team
+            slackSend(
+                channel: '#prod-deployments',
+                color: 'good',
+                message: "🚀 PRODUCTION DEPLOYMENT: ${BUILD_NUMBER}"
+            )
+        }
         failure {
-                    echo "PROD pipeline failed - check logs"
-                    slackSend(
-                        channel: '#alerts',
-                        color: 'danger',
-                        message: "🚨 PRODUCTION DEPLOYMENT FAILED: ${BUILD_NUMBER}"
-                    )
-                }
-            }
+            echo "PROD pipeline failed - check logs"
+            slackSend(
+                channel: '#alerts',
+                color: 'danger',
+                message: "🚨 PRODUCTION DEPLOYMENT FAILED: ${BUILD_NUMBER}"
+            )
+        }
     }
 }

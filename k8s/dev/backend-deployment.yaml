@@ -20,7 +20,7 @@ spec:
     spec:
       containers:
       - name: backend
-        image: docker.io/yogisre12345/simple-fullstack-app:dev-latest
+        image: docker.io/yogisre12345/simple-fullstack-app-backend:dev-latest
         ports:
         - containerPort: 5001
         env:

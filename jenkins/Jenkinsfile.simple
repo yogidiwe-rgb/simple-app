@@ -1,0 +1,72 @@
+// Simple Working Pipeline
+pipeline {
+    agent any
+    
+    stages {
+        stage('Hello') {
+            steps {
+                echo 'Pipeline is working!'
+            }
+        }
+        
+        stage('Build') {
+            steps {
+                script {
+                    // Build images with bat for Windows compatibility
+                    bat '''
+                        echo Building backend...
+                        docker build -t yogisre12345/simple-fullstack-app-backend:test-latest "f:\simple lab Day 1\backend"
+                        
+                        echo Building gateway...
+                        docker build -t yogisre12345/simple-fullstack-app-gateway:test-latest "f:\simple lab Day 1\gateway"
+                        
+                        echo Building frontend...
+                        docker build -t yogisre12345/simple-fullstack-app-frontend:test-latest "f:\simple lab Day 1\frontend"
+                        
+                        echo Building admin...
+                        docker build -t yogisre12345/simple-fullstack-app-admin:test-latest "f:\simple lab Day 1\admin"
+                    '''
+                }
+            }
+        }
+        
+        stage('Push') {
+            steps {
+                script {
+                    bat '''
+                        docker push yogisre12345/simple-fullstack-app-backend:test-latest
+                        docker push yogisre12345/simple-fullstack-app-gateway:test-latest
+                        docker push yogisre12345/simple-fullstack-app-frontend:test-latest
+                        docker push yogisre12345/simple-fullstack-app-admin:test-latest
+                    '''
+                }
+            }
+        }
+        
+        stage('Deploy') {
+            steps {
+                script {
+                    bat '''
+                        kubectl config use-context kind-test-cluster
+                        
+                        kubectl rollout restart deployment/backend -n test
+                        kubectl rollout restart deployment/gateway -n test
+                        kubectl rollout restart deployment/frontend -n test
+                        kubectl rollout restart deployment/admin -n test
+                        
+                        kubectl rollout status deployment/backend -n test --timeout=120s
+                        kubectl rollout status deployment/gateway -n test --timeout=120s
+                        kubectl rollout status deployment/frontend -n test --timeout=120s
+                        kubectl rollout status deployment/admin -n test --timeout=120s
+                    '''
+                }
+            }
+        }
+        
+        stage('Verify') {
+            steps {
+                bat 'kubectl get pods -n test'
+            }
+        }
+    }
+}

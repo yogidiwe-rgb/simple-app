@@ -1,0 +1,146 @@
+// Ultimate Jenkins Pipeline: Admin Panel → Git → TEST Cluster
+pipeline {
+    agent any
+    
+    environment {
+        DOCKER_REGISTRY = 'docker.io/yogisre12345'
+        TEST_CLUSTER = 'kind-test-cluster'
+        GIT_BRANCH = 'develop'
+    }
+    
+    triggers {
+        // Trigger on Git push to develop branch
+        pollSCM('*/2 * * * *')  // Check every 2 minutes
+    }
+    
+    stages {
+        stage('🚀 Pipeline Started') {
+            steps {
+                script {
+                    echo "Pipeline triggered by Admin Panel!"
+                    echo "Timestamp: ${new Date()}"
+                }
+            }
+        }
+        
+        stage('📥 Checkout Code') {
+            steps {
+                git branch: 'develop',
+                    url: 'https://github.com/yogidiwe-rgb/simple-app.git',
+                    credentialsId: 'git-credentials'
+            }
+        }
+        
+        stage('🔨 Build All Images') {
+            parallel {
+                stage('Build Backend') {
+                    steps {
+                        sh '''
+                            docker build -t ${DOCKER_REGISTRY}/simple-fullstack-app-backend:test-latest ./backend
+                        '''
+                    }
+                }
+                stage('Build Gateway') {
+                    steps {
+                        sh '''
+                            docker build -t ${DOCKER_REGISTRY}/simple-fullstack-app-gateway:test-latest ./gateway
+                        '''
+                    }
+                }
+                stage('Build Frontend') {
+                    steps {
+                        sh '''
+                            docker build -t ${DOCKER_REGISTRY}/simple-fullstack-app-frontend:test-latest ./frontend
+                        '''
+                    }
+                }
+                stage('Build Admin') {
+                    steps {
+                        sh '''
+                            docker build -t ${DOCKER_REGISTRY}/simple-fullstack-app-admin:test-latest ./admin
+                        '''
+                    }
+                }
+            }
+        }
+        
+        stage('📤 Push Images') {
+            steps {
+                withCredentials([usernamePassword(credentialsId: 'docker-hub-credentials',
+                                                  usernameVariable: 'DOCKER_USER',
+                                                  passwordVariable: 'DOCKER_PASS')]) {
+                    sh '''
+                        echo ${DOCKER_PASS} | docker login -u ${DOCKER_USER} --password-stdin
+                        
+                        docker push ${DOCKER_REGISTRY}/simple-fullstack-app-backend:test-latest
+                        docker push ${DOCKER_REGISTRY}/simple-fullstack-app-gateway:test-latest
+                        docker push ${DOCKER_REGISTRY}/simple-fullstack-app-frontend:test-latest
+                        docker push ${DOCKER_REGISTRY}/simple-fullstack-app-admin:test-latest
+                    '''
+                }
+            }
+        }
+        
+        stage('☸️ Deploy to TEST Cluster') {
+            steps {
+                script {
+                    sh '''
+                        # Switch to TEST cluster
+                        kubectl config use-context ${TEST_CLUSTER}
+                        
+                        # Apply deployments with new images
+                        kubectl apply -f k8s/test/backend-deployment.yaml
+                        kubectl apply -f k8s/test/gateway-deployment.yaml
+                        kubectl apply -f k8s/test/frontend-deployment.yaml
+                        kubectl apply -f k8s/test/admin-deployment.yaml
+                        
+                        # Restart deployments to pull new images
+                        kubectl rollout restart deployment/backend -n test
+                        kubectl rollout restart deployment/gateway -n test
+                        kubectl rollout restart deployment/frontend -n test
+                        kubectl rollout restart deployment/admin -n test
+                        
+                        # Wait for rollout
+                        kubectl rollout status deployment/backend -n test --timeout=300s
+                        kubectl rollout status deployment/gateway -n test --timeout=300s
+                        kubectl rollout status deployment/frontend -n test --timeout=300s
+                        kubectl rollout status deployment/admin -n test --timeout=300s
+                    '''
+                }
+            }
+        }
+        
+        stage('✅ Health Check') {
+            steps {
+                script {
+                    sh '''
+                        # Wait for services
+                        sleep 30
+                        
+                        # Check all services
+                        kubectl exec -n test deployment/backend -- curl -f http://localhost:5001/api/health
+                        kubectl exec -n test deployment/gateway -- curl -f http://localhost:3000/api/health
+                        kubectl exec -n test deployment/frontend -- curl -f http://localhost/health
+                    '''
+                }
+            }
+        }
+    }
+    
+    post {
+        success {
+            echo '''
+                ✅ DEPLOYMENT SUCCESS!
+                
+                🌐 Access URLs:
+                - Main App: http://localhost:30339
+                - Admin Panel: http://localhost:30380
+                
+                Changes are now LIVE in TEST cluster!
+            '''
+        }
+        failure {
+            echo '❌ Deployment failed. Check logs above.'
+        }
+    }
+}
